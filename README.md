@@ -1,15 +1,15 @@
-def benford_calcul_cote_z(benf_percent, mt):
-    # Extracting the relevant columns using mt
-    percent_col = f'PERCENT_{mt}'
-    tot_col = f'TOT_{mt}'
+def benford_fid(data, nombre, position):
+    # Crée le nom de la nouvelle colonne en fonction de la position et du champ nombre
+    fid = f"F{position}D_{nombre}"
     
-    # Calculating the numerator
-    numerateur = (abs(benf_percent[percent_col] / 100 - benf_percent['EXPECTED'] / 100) - (1 / (2 * benf_percent[tot_col])))
+    # Calcul des premiers "i" chiffres significatifs (FiD)
+    data[fid] = np.sign(data[nombre]) * np.floor(np.abs(data[nombre]) / 10**(np.floor(np.log10(np.abs(data[nombre]))) - position + 1))
     
-    # Calculating the denominator
-    denominateur = np.sqrt(benf_percent['EXPECTED'] / 100 * (1 - benf_percent['EXPECTED'] / 100) / benf_percent[tot_col])
+    # Convertit la colonne en chaîne de caractères avec des zéros initiaux si nécessaire et une largeur fixe
+    data[fid] = data[fid].apply(lambda x: f'{int(x):0{position}d}' if not pd.isna(x) else np.nan)
     
-    # Z-score calculation
-    out = numerateur / denominateur
+    # Définit la colonne FiD à NaN lorsque la valeur absolue du champ 'nombre' est inférieure ou égale à 10
+    data.loc[np.abs(data[nombre]) <= 10, fid] = np.nan
     
-    return out
+    # Retourne le DataFrame avec la nouvelle colonne ajoutée
+    return data
