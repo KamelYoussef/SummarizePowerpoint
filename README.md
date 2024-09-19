@@ -1,22 +1,17 @@
 """
-    Retourne un dataframe augmenté d'une colonne dans laquelle on a extrait les 
-    « i » premiers chiffres d'un nombre.
+    Calcul de la cote Z attribuée au test.
 
-    Cette fonction extrait les « i » premiers chiffres significatifs d'un champ numérique donné 
-    dans un DataFrame et les ajoute comme une nouvelle colonne.
+    Cette fonction calcule la cote Z à partir des pourcentages observés et attendus, pour un champ numérique donné.
 
     Parameters
     ----------
-    data : pandas.DataFrame
-        Jeu de données contenant les valeurs numériques à traiter.
+    benf_percent : pandas.DataFrame
+        Jeu de données qui contient les pourcentages attendus et observés, ainsi que les totaux pour chaque catégorie.
     
-    nombre : str
-        Le nom de la colonne contenant les nombres dont on souhaite extraire les premiers chiffres.
-    
-    position : int
-        Nombre de positions du nombre à extraire (c'est-à-dire combien de chiffres significatifs).
+    mt : str
+        Le nom du champ qui contient la valeur numérique à tester (par exemple : 'RTI', 'TVQ', 'TPS', 'CTI', 'NET', etc.).
 
     Returns
     -------
-    pandas.DataFrame
-        Le DataFrame original avec une colonne supplémentaire contenant les « i » premiers chiffres du champ donné.
+    pandas.Series
+        Une série contenant la cote Z calculée pour chaque ligne du DataFrame.
