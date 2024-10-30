@@ -26,35 +26,25 @@ for i in range(num_records):
     # Generate timestamp
     timestamps.append(start_time + timedelta(minutes=i))
     
-    # Base values for normal data
-    temperature = np.random.normal(60, 5)
-    pressure = np.random.normal(2, 0.3)
-    vibration = np.random.normal(0.8, 0.2)
-    rpm = np.random.normal(1200, 50)
-    humidity = np.random.normal(45, 5)
-    power_consumption = np.random.normal(500, 30)
-    sound_level = np.random.normal(70, 5)
-    oil_level = np.random.normal(80, 10)
-    load_weight = np.random.normal(100, 15)
-    label = 0  # Normal
+    # Base Components (C1, C2, C3)
+    C1 = np.random.normal(60, 5)  # Power-related component
+    C2 = np.random.normal(50, 5)  # Load and Vibration component
+    C3 = np.random.normal(40, 5)  # Environmental component
+    
+    # Derived features based on components
+    power_consumption = C1 * 10 + np.random.normal(0, 5)  # Power as main driver for C1
+    temperature = C1 + np.random.normal(0, 1)  # Temperature influenced by power
+    pressure = C1 * 0.05 + np.random.normal(2, 0.1)  # Pressure lightly tied to power
 
-    # Apply correlations
-    # Correlation 1: Power Consumption -> Temperature
-    temperature += (power_consumption - 500) * 0.02  # Small increase in temperature with power
+    load_weight = C2 + np.random.normal(0, 1)  # Load weight driven by C2
+    vibration = C2 * 0.03 + np.random.normal(0.5, 0.1)  # Vibration depends on load weight
+    sound_level = vibration * 20 + np.random.normal(60, 3)  # Sound level amplified by vibration
 
-    # Correlation 2: Load Weight -> Vibration
-    vibration += (load_weight - 100) * 0.005  # Heavier load, more vibration
+    oil_level = max(0, 100 - C3 + np.random.normal(0, 3))  # Oil levels inversely tied to C3
+    humidity = C3 + np.random.normal(5, 2)  # Humidity affected by environment
+    rpm = C2 * 24 + np.random.normal(1200, 30)  # RPM reacts to load conditions (C2)
 
-    # Correlation 3: Vibration -> Sound Level
-    sound_level += vibration * 10  # Directly correlate sound level with vibration
-
-    # Correlation 4: Temperature -> Pressure
-    pressure += (temperature - 60) * 0.05  # Increase in temperature raises pressure
-
-    # Correlation 5: Oil Level -> Temperature and Vibration (lower oil, higher values)
-    if oil_level < 60:
-        temperature += (80 - oil_level) * 0.1  # Low oil level causes temperature rise
-        vibration += (80 - oil_level) * 0.02   # Low oil level causes vibration increase
+    label = 0  # Normal condition by default
 
     # Introduce anomalies
     if random.random() < anomaly_fraction:
@@ -107,5 +97,5 @@ data = pd.DataFrame({
 })
 
 # Save to CSV
-data.to_csv('/mnt/data/sensor_data_anomaly_correlated.csv', index=False)
-print("Correlated dataset created and saved as 'sensor_data_anomaly_correlated.csv'")
+data.to_csv('/mnt/data/sensor_data_anomaly_pca_correlated.csv', index=False)
+print("PCA-correlated dataset created and saved as 'sensor_data_anomaly_pca_correlated.csv'")
