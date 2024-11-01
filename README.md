@@ -1,6 +1,8 @@
-algorithms = {
-    "Isolation Forest": IsolationForest(contamination=0.05, random_state=42),
-    "One-Class SVM": OneClassSVM(nu=0.05, kernel="rbf", gamma=0.1),
-    "Local Outlier Factor": LocalOutlierFactor(n_neighbors=20, contamination=0.05),
-    "Elliptic Envelope": EllipticEnvelope(contamination=0.05)
+classifiers = {
+    "Random Forest": RandomForestClassifier(random_state=42),
+    "SVM": SVC(kernel='linear', random_state=42),
+    "K-Nearest Neighbors": KNeighborsClassifier(n_neighbors=5),
+    "Logistic Regression": LogisticRegression(random_state=42),
+    "Decision Tree": DecisionTreeClassifier(random_state=42),
+    "Naive Bayes": GaussianNB()
 }
