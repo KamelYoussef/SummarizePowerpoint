@@ -1,9 +1,6 @@
 algorithms = {
-    "K-Means": KMeans(n_clusters=3, random_state=42),
-    "Agglomerative": AgglomerativeClustering(n_clusters=3),
-    "DBSCAN": DBSCAN(eps=0.5, min_samples=5),
-    "Mean-Shift": MeanShift(),
-    "Gaussian Mixture": GaussianMixture(n_components=3, random_state=42),
-    "Spectral": SpectralClustering(n_clusters=3, affinity='nearest_neighbors', random_state=42),
-    "BIRCH": Birch(n_clusters=3)
+    "Isolation Forest": IsolationForest(contamination=0.05, random_state=42),
+    "One-Class SVM": OneClassSVM(nu=0.05, kernel="rbf", gamma=0.1),
+    "Local Outlier Factor": LocalOutlierFactor(n_neighbors=20, contamination=0.05),
+    "Elliptic Envelope": EllipticEnvelope(contamination=0.05)
 }
