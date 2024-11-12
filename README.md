@@ -1,5 +1,6 @@
-cluster_means <- data %>%
-  group_by(Cluster) %>%
-  summarise(across(where(is.numeric), mean, na.rm = TRUE))
+normalize <- function(x) {
+  return((x - min(x)) / (max(x) - min(x)))
+}
 
-print(cluster_means)
+# Apply to data frame
+normalized_data <- as.data.frame(lapply(data, normalize))
