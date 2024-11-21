@@ -1,25 +1,25 @@
-import ipywidgets as widgets
-from IPython.display import display, Markdown
+conf_matrix_values <- conf_matrix$table
+accuracy <- conf_matrix$overall['Accuracy']
+precision <- conf_matrix$byClass['Pos Pred Value']
+recall <- conf_matrix$byClass['Sensitivity']
+f1_score <- 2 * (precision * recall) / (precision + recall)
 
-def dvc_add(file_path):
-    run_dvc_command(f"dvc add {file_path}")
+# Extract counts (TP, FP, TN, FN) for a binary classification
+TP <- conf_matrix_values[1, 1]
+FP <- conf_matrix_values[1, 2]
+TN <- conf_matrix_values[2, 2]
+FN <- conf_matrix_values[2, 1]
 
-def dvc_pull():
-    run_dvc_command("dvc pull")
+# Start an MLflow run
+mlflow_start_run()
 
-def dvc_push():
-    run_dvc_command("dvc push")
+# Log confusion matrix components as parameters
+mlflow_log_param("Accuracy", accuracy)
+mlflow_log_param("Precision", precision)
+mlflow_log_param("Recall", recall)
+mlflow_log_param("F1_Score", f1_score)
+mlflow_log_param("TP", TP)
+mlflow_log_param("FP", FP)
+mlflow_log_param("TN", TN)
+mlflow_log_param("FN", FN)
 
-# Widgets
-file_input = widgets.Text(description="File Path:")
-button_add = widgets.Button(description="DVC Add")
-button_add.on_click(lambda _: dvc_add(file_input.value))
-
-button_pull = widgets.Button(description="DVC Pull")
-button_pull.on_click(lambda _: dvc_pull())
-
-button_push = widgets.Button(description="DVC Push")
-button_push.on_click(lambda _: dvc_push())
-
-# Display widgets
-display(widgets.VBox([file_input, button_add, button_pull, button_push]))
