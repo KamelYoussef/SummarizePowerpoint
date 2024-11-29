@@ -1,29 +1,20 @@
 import mlflow
-import mlflow.sklearn
-from sklearn.metrics import classification_report
-from src.data import load_data, preprocess_data, split_data
+from src.data import get_processed_data, split_data
+from src.train import train_and_log_model
+from src.evaluate import evaluate_model
 
-def evaluate_model(model_path, data_path, target_column):
-    """Evaluate the model."""
-    # Load and preprocess data
-    data = load_data(data_path)
-    data = preprocess_data(data)
-    _, X_test, _, y_test = split_data(data, target_column)
-    
-    # Load model
-    model = mlflow.sklearn.load_model(model_path)
-    
-    # Evaluate
-    predictions = model.predict(X_test)
-    report = classification_report(y_test, predictions)
-    print(report)
+def run_pipeline(data_path, target_column, processed_data_path):
+    """Run the full ML pipeline."""
+    # Step 1: Load or preprocess data
+    mlflow.log_param("data_path", data_path)
+    data = get_processed_data(data_path, processed_data_path)
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Evaluate a model.")
-    parser.add_argument("--model-path", type=str, required=True, help="Path to the MLflow model")
-    parser.add_argument("--data-path", type=str, required=True, help="Path to the data file")
-    parser.add_argument("--target-column", type=str, required=True, help="Target column name")
-    args = parser.parse_args()
-    
-    evaluate_model(args.model_path, args.data_path, args.target_column)
+    # Step 2: Split data
+    X_train, X_test, y_train, y_test = split_data(data, target_column)
+    mlflow.log_param("target_column", target_column)
+
+    # Step 3: Train and log model
+    model_uri = train_and_log_model(X_train, y_train, X_test, y_test)
+
+    # Step 4: Evaluate the model
+    evaluate_model(model_uri, X_test, y_test)
