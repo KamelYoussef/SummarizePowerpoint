@@ -1,9 +1,11 @@
-# Perform KS-test to compare the distributions of anomaly scores for each month
-ks_results <- data.frame(Month = months, KS_p_value = NA)
+library(transport)
+
+# Calculate Wasserstein Distance
+wasserstein_results <- data.frame(Month = months, Wasserstein_Distance = NA)
 
 for (t in 2:length(predictions)) {
-  ks_results$KS_p_value[t] <- ks.test(predictions[[1]], predictions[[t]])$p.value
+  wasserstein_results$Wasserstein_Distance[t] <- wasserstein1d(predictions[[1]], predictions[[t]])
 }
 
 # Display results
-print(ks_results)
+print(wasserstein_results)
