@@ -1,13 +1,18 @@
-# Create a dataframe to store both absolute and squared differences
-comparison_results <- data.frame(Month = months, 
-                                Abs_Difference_Mean = NA,
-                                Squared_Difference_Mean = NA)
+library(ggplot2)
 
-# Calculate both absolute and squared differences
-for (t in 2:length(predictions)) {
-  comparison_results$Abs_Difference_Mean[t] <- mean(abs(predictions[[1]] - predictions[[t]]))
-  comparison_results$Squared_Difference_Mean[t] <- mean((predictions[[1]] - predictions[[t]])^2)
-}
+# Convert to long format for easier plotting
+comparison_long <- reshape(comparison_results, 
+                           varying = c("Abs_Difference_Mean", "Squared_Difference_Mean"), 
+                           v.names = "Difference", 
+                           timevar = "Type", 
+                           times = c("Absolute", "Squared"), 
+                           direction = "long")
 
-# Display results
-print(comparison_results)
+# Plot
+ggplot(comparison_long, aes(x = Month, y = Difference, color = Type)) +
+  geom_line() +
+  labs(title = "Comparison of Absolute vs Squared Differences", 
+       x = "Month", 
+       y = "Difference", 
+       color = "Difference Type") +
+  theme_minimal()
