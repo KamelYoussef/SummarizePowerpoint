@@ -1,16 +1,10 @@
-library(philentropy)
-
-# Initialize result dataframe
-kl_results <- data.frame(Month = months, KL_Divergence = NA)
+# Initialize result dataframe for absolute difference
+abs_diff_results <- data.frame(Month = months, Abs_Difference_Mean = NA)
 
 for (t in 2:length(predictions)) {
-  # Normalize histograms for comparison
-  hist1 <- hist(predictions[[1]], breaks = 50, plot = FALSE)$density
-  hist2 <- hist(predictions[[t]], breaks = 50, plot = FALSE)$density
-  
-  # Compute KL Divergence (to prevent negative values, we use JSD)
-  kl_results$KL_Divergence[t] <- KL.divergence(hist1, hist2)
+  # Compute the absolute difference between the first month's predictions and each subsequent month's predictions
+  abs_diff_results$Abs_Difference_Mean[t] <- mean(abs(predictions[[1]] - predictions[[t]]))
 }
 
 # Display results
-print(kl_results)
+print(abs_diff_results)
