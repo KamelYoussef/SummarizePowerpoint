@@ -1,12 +1,15 @@
 import mlflow
 
-# Load the model
-model_uri = "models:/GGUF_Model/1"  # Adjust the version number as needed
-loaded_model = mlflow.pyfunc.load_model(model_uri=model_uri)
+# Define the model path where your GGUF model is stored
+model_path = "./path_to_your_model_directory"
 
-# Prepare input data
-input_data = {"input_text": "Your input text here"}
+# Initialize the custom model wrapper
+gguf_model = GGUFModelWrapper(model_path=model_path)
 
-# Make predictions
-predictions = loaded_model.predict(input_data)
-print(predictions["output_text"])
+# Log the model
+with mlflow.start_run():
+    mlflow.pyfunc.log_model(
+        artifact_path="gguf_model",
+        python_model=gguf_model,
+        registered_model_name="GGUF_Model"
+    )
