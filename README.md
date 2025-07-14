@@ -1,5 +1,7 @@
-model = DonutFineTuner()
-trainer = pl.Trainer(accelerator="gpu", devices=1, max_epochs=5)
-trainer.fit(model, 
-            train_dataloaders=torch.utils.data.DataLoader(train_ds, batch_size=4, shuffle=True),
-            val_dataloaders=torch.utils.data.DataLoader(val_ds, batch_size=2))
+import os, json
+from glob import glob
+from PIL import Image
+from datasets import Dataset
+import torch
+import pytorch_lightning as pl
+from transformers import DonutProcessor, VisionEncoderDecoderModel
