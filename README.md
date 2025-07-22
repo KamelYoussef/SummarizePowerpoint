@@ -1,40 +1,33 @@
-from datasets import load_dataset
-
-raw = load_dataset(
-    "imagefolder",
-    data_dir="dataset",
-    split="train",
-    keep_in_memory=True
-)
-
-def preprocess(sample):
-    import json
-    text = json.loads(sample["ground_truth"])
-    token_str = "<s>" + json2token(text) + "</s>"
-    sample["text"] = token_str
-    sample["image"] = sample["image"].convert("RGB")
-    return sample
-
-proc = raw.map(preprocess)
-
-from transformers import DonutProcessor
-
-processor = DonutProcessor.from_pretrained("naver-clova-ix/donut-base")
-new_tokens = list_of_special_tokens_from_json()  # e.g., field names wrapped in tags
-processor.tokenizer.add_special_tokens({"additional_special_tokens": new_tokens})
-processor.feature_extractor.size = [720, 960]
-
-def transform(sample):
-    pv = processor(sample["image"], return_tensors="pt").pixel_values.squeeze()
-    enc = processor.tokenizer(
-        sample["text"],
-        padding="max_length",
-        truncation=True,
-        max_length=512,
-        return_tensors="pt"
-    )
-    labels = enc.input_ids.clone()
-    labels[labels == processor.tokenizer.pad_token_id] = -100
-    return {"pixel_values": pv, "labels": labels}
-
-dataset = proc.map(transform, remove_columns=["image", "ground_truth", "text"])
+def json2token(obj, update_special_tokens_for_json_key: bool = True, sort_json_key: bool = True):
+    """
+    Convert an ordered JSON object into a token sequence
+    """
+    if type(obj) == dict:
+        if len(obj) == 1 and "text_sequence" in obj:
+            return obj["text_sequence"]
+        else:
+            output = ""
+            if sort_json_key:
+                keys = sorted(obj.keys(), reverse=True)
+            else:
+                keys = obj.keys()
+            for k in keys:
+                if update_special_tokens_for_json_key:
+                    new_special_tokens.append(fr"<s_{k}>") if fr"<s_{k}>" not in new_special_tokens else None
+                    new_special_tokens.append(fr"</s_{k}>") if fr"</s_{k}>" not in new_special_tokens else None
+                output += (
+                    fr"<s_{k}>"
+                    + json2token(obj[k], update_special_tokens_for_json_key, sort_json_key)
+                    + fr"</s_{k}>"
+                )
+            return output
+    elif type(obj) == list:
+        return r"<sep/>".join(
+            [json2token(item, update_special_tokens_for_json_key, sort_json_key) for item in obj]
+        )
+    else:
+        # excluded special tokens for now
+        obj = str(obj)
+        if f"<{obj}/>" in new_special_tokens:
+            obj = f"<{obj}/>"  # for categorical special tokens
+        return obj
