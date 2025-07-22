@@ -1,24 +1,24 @@
-def preprocess(examples):
-    # Load and preprocess the image
-    images = [Image.open(img_path).convert("RGB") for img_path in examples["image_path"]]
-    pixel_values = processor(images, return_tensors="pt", padding=True).pixel_values
+training_args = Seq2SeqTrainingArguments(
+    output_dir="./donut-docvqa-finetuned",
+    evaluation_strategy="epoch",
+    learning_rate=2e-5,
+    per_device_train_batch_size=4,
+    per_device_eval_batch_size=4,
+    num_train_epochs=3,
+    weight_decay=0.01,
+    save_total_limit=3,
+    predict_with_generate=True,
+    logging_dir="./logs",
+)
 
-    # Tokenize the target JSON
-    labels = []
-    for target in examples["target_json"]:
-        gt = json.dumps({"gt_parse": target}, ensure_ascii=False)
-        label = processor.tokenizer(gt, add_special_tokens=False).input_ids
-        labels.append(label)
+# Initialize the trainer
+trainer = Seq2SeqTrainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset["train"],
+    eval_dataset=dataset["test"],
+    tokenizer=processor.tokenizer,
+)
 
-    # Pad the labels to the same length
-    max_length = max(len(label) for label in labels)
-    labels = [label + [processor.tokenizer.pad_token_id] * (max_length - len(label)) for label in labels]
-    labels = torch.tensor(labels)
-
-    return {"pixel_values": pixel_values, "labels": labels}
-
-# Apply preprocessing
-dataset = DatasetDict({
-    "train": dataset["train"].map(preprocess, batched=True),
-    "test": dataset["test"].map(preprocess, batched=True)
-})
+# Start training
+trainer.train()
