@@ -1,24 +1,48 @@
-training_args = Seq2SeqTrainingArguments(
-    output_dir="./donut-docvqa-finetuned",
-    evaluation_strategy="epoch",
-    learning_rate=2e-5,
-    per_device_train_batch_size=4,
-    per_device_eval_batch_size=4,
-    num_train_epochs=3,
-    weight_decay=0.01,
-    save_total_limit=3,
-    predict_with_generate=True,
-    logging_dir="./logs",
-)
+import os
+import json
 
-# Initialize the trainer
-trainer = Seq2SeqTrainer(
-    model=model,
-    args=training_args,
-    train_dataset=dataset["train"],
-    eval_dataset=dataset["test"],
-    tokenizer=processor.tokenizer,
-)
+def create_metadata_jsonl(dataset_dir: str, output_file: str = "metadata.jsonl"):
+    """
+    Reads all .png and .json files in dataset_dir, and writes metadata.jsonl
+    where each line is:
+    {"file_name": "userX.png", "ground_truth": "{\"gt_parse\": ... }"}
+    """
+    lines = []
+    for fname in os.listdir(dataset_dir):
+        if fname.lower().endswith(".json"):
+            stem = fname[:-5]  # remove .json
+            img_name = stem + ".png"
+            json_path = os.path.join(dataset_dir, fname)
+            img_path = os.path.join(dataset_dir, img_name)
 
-# Start training
-trainer.train()
+            if not os.path.isfile(img_path):
+                print(f"⚠️ Warning: no matching image for {json_path}, skipping.")
+                continue
+
+            # Load JSON content
+            with open(json_path, 'r', encoding='utf-8') as f:
+                content = json.load(f)
+
+            # Wrap content under "gt_parse"
+            wrapped = {"gt_parse": content}
+
+            # Dump ground_truth as a JSON string
+            gt_str = json.dumps(wrapped, ensure_ascii=False)
+
+            # Prepare metadata line
+            entry = {
+                "file_name": img_name,
+                "ground_truth": gt_str
+            }
+            lines.append(entry)
+
+    # Write to metadata.jsonl
+    out_path = os.path.join(dataset_dir, output_file)
+    with open(out_path, 'w', encoding='utf-8') as f:
+        for entry in lines:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    print(f"✅ Wrote {len(lines)} entries to {out_path}")
+
+# Usage:
+# create_metadata_jsonl("dataset/")
