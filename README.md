@@ -1,27 +1,55 @@
-def transform_and_tokenize(sample, processor=processor, split="train", max_length=512, ignore_id=-100):
-    # create tensor from image
-    try:
-        pixel_values = processor(
-            sample["image"], random_padding=split == "train", return_tensors="pt"
-        ).pixel_values.squeeze()
-    except Exception as e:
-        print(sample)
-        print(f"Error: {e}")
-        return {}
+import torch
+from transformers import VisionEncoderDecoderModel, VisionEncoderDecoderConfig
  
-    # tokenize document
-    input_ids = processor.tokenizer(
-        sample["text"],
-        add_special_tokens=False,
-        max_length=max_length,
-        padding="max_length",
-        truncation=True,
-        return_tensors="pt",
-    )["input_ids"].squeeze(0)
+# Load model from huggingface.co
+model = VisionEncoderDecoderModel.from_pretrained("naver-clova-ix/donut-base")
  
-    labels = input_ids.clone()
-    labels[labels == processor.tokenizer.pad_token_id] = ignore_id  # model doesn't need to predict pad token
-    return {"pixel_values": pixel_values, "labels": labels, "target_sequence": sample["text"]}
+# Resize embedding layer to match vocabulary size
+new_emb = model.decoder.resize_token_embeddings(len(processor.tokenizer))
+print(f"New embedding size: {new_emb}")
+# Adjust our image size and output sequence lengths
+model.config.encoder.image_size = processor.feature_extractor.size[::-1] # (height, width)
+model.config.decoder.max_length = len(max(processed_dataset["train"]["labels"], key=len))
  
-# need at least 32-64GB of RAM to run this
-processed_dataset = proc_dataset.map(transform_and_tokenize,remove_columns=["image","text"])
+# Add task token for decoder to start
+model.config.pad_token_id = processor.tokenizer.pad_token_id
+model.config.decoder_start_token_id = processor.tokenizer.convert_tokens_to_ids(['<s>'])[0]
+ 
+# is done by Trainer
+# device = "cuda" if torch.cuda.is_available() else "cpu"
+# model.to(device)
+
+
+from huggingface_hub import HfFolder
+from transformers import Seq2SeqTrainingArguments, Seq2SeqTrainer
+ 
+# hyperparameters used for multiple args
+hf_repository_id = "donut-base-sroie"
+ 
+# Arguments for training
+training_args = Seq2SeqTrainingArguments(
+    output_dir=hf_repository_id,
+    num_train_epochs=3,
+    learning_rate=2e-5,
+    per_device_train_batch_size=2,
+    weight_decay=0.01,
+    fp16=True,
+    logging_steps=100,
+    save_total_limit=2,
+    evaluation_strategy="no",
+    save_strategy="epoch",
+    predict_with_generate=True,
+    # push to hub parameters
+    report_to="tensorboard",
+    push_to_hub=True,
+    hub_strategy="every_save",
+    hub_model_id=hf_repository_id,
+    hub_token=HfFolder.get_token(),
+)
+ 
+# Create Trainer
+trainer = Seq2SeqTrainer(
+    model=model,
+    args=training_args,
+    train_dataset=processed_dataset["train"],
+)
