@@ -1,48 +1,40 @@
-import os
-import json
+from datasets import load_dataset
 
-def create_metadata_jsonl(dataset_dir: str, output_file: str = "metadata.jsonl"):
-    """
-    Reads all .png and .json files in dataset_dir, and writes metadata.jsonl
-    where each line is:
-    {"file_name": "userX.png", "ground_truth": "{\"gt_parse\": ... }"}
-    """
-    lines = []
-    for fname in os.listdir(dataset_dir):
-        if fname.lower().endswith(".json"):
-            stem = fname[:-5]  # remove .json
-            img_name = stem + ".png"
-            json_path = os.path.join(dataset_dir, fname)
-            img_path = os.path.join(dataset_dir, img_name)
+raw = load_dataset(
+    "imagefolder",
+    data_dir="dataset",
+    split="train",
+    keep_in_memory=True
+)
 
-            if not os.path.isfile(img_path):
-                print(f"⚠️ Warning: no matching image for {json_path}, skipping.")
-                continue
+def preprocess(sample):
+    import json
+    text = json.loads(sample["ground_truth"])
+    token_str = "<s>" + json2token(text) + "</s>"
+    sample["text"] = token_str
+    sample["image"] = sample["image"].convert("RGB")
+    return sample
 
-            # Load JSON content
-            with open(json_path, 'r', encoding='utf-8') as f:
-                content = json.load(f)
+proc = raw.map(preprocess)
 
-            # Wrap content under "gt_parse"
-            wrapped = {"gt_parse": content}
+from transformers import DonutProcessor
 
-            # Dump ground_truth as a JSON string
-            gt_str = json.dumps(wrapped, ensure_ascii=False)
+processor = DonutProcessor.from_pretrained("naver-clova-ix/donut-base")
+new_tokens = list_of_special_tokens_from_json()  # e.g., field names wrapped in tags
+processor.tokenizer.add_special_tokens({"additional_special_tokens": new_tokens})
+processor.feature_extractor.size = [720, 960]
 
-            # Prepare metadata line
-            entry = {
-                "file_name": img_name,
-                "ground_truth": gt_str
-            }
-            lines.append(entry)
+def transform(sample):
+    pv = processor(sample["image"], return_tensors="pt").pixel_values.squeeze()
+    enc = processor.tokenizer(
+        sample["text"],
+        padding="max_length",
+        truncation=True,
+        max_length=512,
+        return_tensors="pt"
+    )
+    labels = enc.input_ids.clone()
+    labels[labels == processor.tokenizer.pad_token_id] = -100
+    return {"pixel_values": pv, "labels": labels}
 
-    # Write to metadata.jsonl
-    out_path = os.path.join(dataset_dir, output_file)
-    with open(out_path, 'w', encoding='utf-8') as f:
-        for entry in lines:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-    print(f"✅ Wrote {len(lines)} entries to {out_path}")
-
-# Usage:
-# create_metadata_jsonl("dataset/")
+dataset = proc.map(transform, remove_columns=["image", "ground_truth", "text"])
