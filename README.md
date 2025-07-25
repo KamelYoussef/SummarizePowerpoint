@@ -1,55 +1,55 @@
+import re
+import transformers
+from PIL import Image
+from transformers import DonutProcessor, VisionEncoderDecoderModel
 import torch
-from transformers import VisionEncoderDecoderModel, VisionEncoderDecoderConfig
+import random
+import numpy as np
  
-# Load model from huggingface.co
-model = VisionEncoderDecoderModel.from_pretrained("naver-clova-ix/donut-base")
+# hidde logs
+transformers.logging.disable_default_handler()
  
-# Resize embedding layer to match vocabulary size
-new_emb = model.decoder.resize_token_embeddings(len(processor.tokenizer))
-print(f"New embedding size: {new_emb}")
-# Adjust our image size and output sequence lengths
-model.config.encoder.image_size = processor.feature_extractor.size[::-1] # (height, width)
-model.config.decoder.max_length = len(max(processed_dataset["train"]["labels"], key=len))
  
-# Add task token for decoder to start
-model.config.pad_token_id = processor.tokenizer.pad_token_id
-model.config.decoder_start_token_id = processor.tokenizer.convert_tokens_to_ids(['<s>'])[0]
+# Load our model from Hugging Face
+processor = DonutProcessor.from_pretrained("philschmid/donut-base-sroie")
+model = VisionEncoderDecoderModel.from_pretrained("philschmid/donut-base-sroie")
  
-# is done by Trainer
-# device = "cuda" if torch.cuda.is_available() else "cpu"
-# model.to(device)
-
-
-from huggingface_hub import HfFolder
-from transformers import Seq2SeqTrainingArguments, Seq2SeqTrainer
+# Move model to GPU
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model.to(device)
  
-# hyperparameters used for multiple args
-hf_repository_id = "donut-base-sroie"
+# Load random document image from the test set
+test_sample = processed_dataset["test"][random.randint(1, 50)]
  
-# Arguments for training
-training_args = Seq2SeqTrainingArguments(
-    output_dir=hf_repository_id,
-    num_train_epochs=3,
-    learning_rate=2e-5,
-    per_device_train_batch_size=2,
-    weight_decay=0.01,
-    fp16=True,
-    logging_steps=100,
-    save_total_limit=2,
-    evaluation_strategy="no",
-    save_strategy="epoch",
-    predict_with_generate=True,
-    # push to hub parameters
-    report_to="tensorboard",
-    push_to_hub=True,
-    hub_strategy="every_save",
-    hub_model_id=hf_repository_id,
-    hub_token=HfFolder.get_token(),
-)
+def run_prediction(sample, model=model, processor=processor):
+    # prepare inputs
+    pixel_values = torch.tensor(test_sample["pixel_values"]).unsqueeze(0)
+    task_prompt = "<s>"
+    decoder_input_ids = processor.tokenizer(task_prompt, add_special_tokens=False, return_tensors="pt").input_ids
  
-# Create Trainer
-trainer = Seq2SeqTrainer(
-    model=model,
-    args=training_args,
-    train_dataset=processed_dataset["train"],
-)
+    # run inference
+    outputs = model.generate(
+        pixel_values.to(device),
+        decoder_input_ids=decoder_input_ids.to(device),
+        max_length=model.decoder.config.max_position_embeddings,
+        early_stopping=True,
+        pad_token_id=processor.tokenizer.pad_token_id,
+        eos_token_id=processor.tokenizer.eos_token_id,
+        use_cache=True,
+        num_beams=1,
+        bad_words_ids=[[processor.tokenizer.unk_token_id]],
+        return_dict_in_generate=True,
+    )
+ 
+    # process output
+    prediction = processor.batch_decode(outputs.sequences)[0]
+    prediction = processor.token2json(prediction)
+ 
+    # load reference target
+    target = processor.token2json(test_sample["target_sequence"])
+    return prediction, target
+ 
+prediction, target = run_prediction(test_sample)
+print(f"Reference:\n {target}")
+print(f"Prediction:\n {prediction}")
+processor.feature_extractor.to_pil_image(np.array(test_sample["pixel_values"])).resize((350,600))
