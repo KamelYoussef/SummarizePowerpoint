@@ -1,14 +1,23 @@
-import ollama
+#!/bin/bash
 
-response = ollama.chat(
-    model='gemma3',
-    messages=[
-        {
-            "role": "user",
-            "content": "What is in this image?",
-            "images": ["./your_image.jpg"]
-        }
-    ]
-)
+# Usage: create_repo myproject
+NAME=$1
 
-print(response["message"]["content"])
+if [ -z "$NAME" ]; then
+  echo "Usage: create_repo <project-name>"
+  exit 1
+fi
+
+# Create the repo
+mkdir "$NAME"
+cd "$NAME" || exit
+
+# Initialize git
+git init
+
+# Create structure
+mkdir src notebooks
+touch conda.yml
+
+echo "Repository '$NAME' created with structure:"
+tree .
