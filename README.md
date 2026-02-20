@@ -1,46 +1,83 @@
-import os
-import hashlib
-import mlflow
-import stat
+import pytest
+from unittest.mock import MagicMock
+import front_functions  # Assuming this is the filename
 
-def smart_log_data(local_path, artifact_name="training_dataset"):
-    """
-    DVC-like versioning inside MLflow.
-    Uses Hard Links to save space and sets files to Read-Only for security.
-    """
-    if not mlflow.active_run():
-        raise Exception("No active MLflow run found! Start a run first.")
-
-    # 1. Get the MLflow destination folder for this specific run
-    run_id = mlflow.active_run().info.run_id
-    dest_dir = os.path.join(mlflow.get_artifact_uri().replace("file://", ""), artifact_name)
-    os.makedirs(dest_dir, exist_ok=True)
+@pytest.fixture
+def mock_dependencies(mocker):
+    """Fixture to mock all external libraries and classes."""
+    # Mocking Streamlit components
+    mocker.patch("streamlit.error")
     
-    filename = os.path.basename(local_path)
-    dest_path = os.path.join(dest_dir, filename)
-
-    # 2. Link the data (Deduplication)
-    try:
-        if os.path.exists(dest_path):
-            os.remove(dest_path)
-        
-        # This is the "Magic": Link points to the same disk space
-        os.link(local_path, dest_path)
-        
-        # 3. Security: Set the logged file to READ-ONLY (444)
-        # This ensures the 'historical record' in MLflow cannot be changed
-        os.chmod(dest_path, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
-        
-        print(f"Successfully versioned: {filename}")
-        print(f"Run ID: {run_id} | Storage: No extra space used.")
-        
-    except Exception as e:
-        print(f"Hard Link failed (maybe different disks?). Falling back to copy: {e}")
-        mlflow.log_artifact(local_path, artifact_name)
-
-# --- HOW TO USE IN JUPYTER ---
-with mlflow.start_run(run_name="Secure_Model_v1"):
-    # Just point to your data, the function handles the rest
-    smart_log_data("/home/jovyan/data/confidential_v1.csv")
+    # Mocking PDF processing library
+    mock_to_markdown = mocker.patch("pymupdf4llm.to_markdown")
     
-    # Your training code here...
+    # Mocking internal validation
+    mock_valid = mocker.patch("front_functions.is_valid_pdf")
+    
+    # Mocking dot-env loading to avoid file system errors in SonarQube
+    mocker.patch("front_functions.load_dotenv")
+    
+    # Mocking the Backend Processor
+    mock_processor_cls = mocker.patch("front_functions.ProcesseurLangChain")
+    mock_processor_instance = mock_processor_cls.return_value
+    mock_processor_instance.traiter_chaine.return_value = "Résumé généré avec succès"
+    
+    # Mocking Authentication
+    mocker.patch("front_functions.rq_ia.authentifier")
+    
+    return {
+        "to_markdown": mock_to_markdown,
+        "is_valid": mock_valid,
+        "processor": mock_processor_instance
+    }
+
+def test_process_pdf_success(mock_dependencies, mocker):
+    """Tests the full successful path of the function."""
+    # Setup
+    mock_dependencies["is_valid"].return_value = True
+    mock_dependencies["to_markdown"].return_value = [
+        {"metadata": {"page": 1}, "text": "Contenu page 1"},
+        {"metadata": {"page": 2}, "text": "Contenu page 2"}
+    ]
+    
+    config = MagicMock()
+    config.execution_locale = True
+    config.palier = "test_palier"
+    
+    # Act
+    result = front_functions.process_pdf(
+        file="mock_file", 
+        _pdf_filename="test.pdf", 
+        config=config
+    )
+    
+    # Assert
+    assert result == "Résumé généré avec succès"
+    assert mock_dependencies["processor"].traiter_chaine.called
+
+def test_process_pdf_invalid_file(mock_dependencies):
+    """Tests the 'if not is_valid_pdf' branch to ensure coverage."""
+    # Setup
+    mock_dependencies["is_valid"].return_value = False
+    
+    # Act
+    result = front_functions.process_pdf("bad_file", "bad.pdf", MagicMock())
+    
+    # Assert
+    import streamlit as st
+    assert result is None
+    st.error.assert_called_with("Veuillez sélectionner un fichier PDF valide.")
+
+def test_process_pdf_exception_handling(mock_dependencies):
+    """Tests the 'except Exception' block for full SonarQube coverage."""
+    # Setup: Force an error during PDF processing
+    mock_dependencies["is_valid"].return_value = True
+    mock_dependencies["to_markdown"].side_effect = Exception("Crash test")
+    
+    # Act
+    result = front_functions.process_pdf("file", "file.pdf", MagicMock())
+    
+    # Assert
+    assert result is None
+    import streamlit as st
+    st.error.assert_called()
