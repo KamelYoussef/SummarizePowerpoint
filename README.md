@@ -1,83 +1,35 @@
 import pytest
 from unittest.mock import MagicMock
-import front_functions  # Assuming this is the filename
 
-@pytest.fixture
-def mock_dependencies(mocker):
-    """Fixture to mock all external libraries and classes."""
-    # Mocking Streamlit components
-    mocker.patch("streamlit.error")
+def test_summary_options_multi_page(mocker):
+    # 1. Mock the PDF utility to return more than 1 page
+    mocker.patch("front_functions.pdf_num_pages", return_value=5)
     
-    # Mocking PDF processing library
-    mock_to_markdown = mocker.patch("pymupdf4llm.to_markdown")
+    # 2. Mock Streamlit widgets to return specific user choices
+    mocker.patch("streamlit.radio", return_value="Résumé court")
+    mocker.patch("streamlit.selectbox", return_value="Anglais")
+    # This mock ensures the slider branch is executed and covered
+    mocker.patch("streamlit.slider", return_value=(1, 3))
     
-    # Mocking internal validation
-    mock_valid = mocker.patch("front_functions.is_valid_pdf")
+    # 3. Create a dummy file object
+    mock_pdf = MagicMock()
     
-    # Mocking dot-env loading to avoid file system errors in SonarQube
-    mocker.patch("front_functions.load_dotenv")
+    # 4. Call the function
+    from front_functions import summary_options
+    types, language, pages = summary_options(mock_pdf)
     
-    # Mocking the Backend Processor
-    mock_processor_cls = mocker.patch("front_functions.ProcesseurLangChain")
-    mock_processor_instance = mock_processor_cls.return_value
-    mock_processor_instance.traiter_chaine.return_value = "Résumé généré avec succès"
-    
-    # Mocking Authentication
-    mocker.patch("front_functions.rq_ia.authentifier")
-    
-    return {
-        "to_markdown": mock_to_markdown,
-        "is_valid": mock_valid,
-        "processor": mock_processor_instance
-    }
+    # 5. Assertions
+    assert types == "Résumé court"
+    assert language == "English"  # Because options["Anglais"] == "English"
+    assert pages == (1, 3)
 
-def test_process_pdf_success(mock_dependencies, mocker):
-    """Tests the full successful path of the function."""
-    # Setup
-    mock_dependencies["is_valid"].return_value = True
-    mock_dependencies["to_markdown"].return_value = [
-        {"metadata": {"page": 1}, "text": "Contenu page 1"},
-        {"metadata": {"page": 2}, "text": "Contenu page 2"}
-    ]
+def test_summary_options_single_page(mocker):
+    mocker.patch("front_functions.pdf_num_pages", return_value=1)
+    mocker.patch("streamlit.radio", return_value="Résumé long")
+    mocker.patch("streamlit.selectbox", return_value="Francais")
     
-    config = MagicMock()
-    config.execution_locale = True
-    config.palier = "test_palier"
+    mock_pdf = MagicMock()
+    types, language, pages = summary_options(mock_pdf)
     
-    # Act
-    result = front_functions.process_pdf(
-        file="mock_file", 
-        _pdf_filename="test.pdf", 
-        config=config
-    )
-    
-    # Assert
-    assert result == "Résumé généré avec succès"
-    assert mock_dependencies["processor"].traiter_chaine.called
-
-def test_process_pdf_invalid_file(mock_dependencies):
-    """Tests the 'if not is_valid_pdf' branch to ensure coverage."""
-    # Setup
-    mock_dependencies["is_valid"].return_value = False
-    
-    # Act
-    result = front_functions.process_pdf("bad_file", "bad.pdf", MagicMock())
-    
-    # Assert
-    import streamlit as st
-    assert result is None
-    st.error.assert_called_with("Veuillez sélectionner un fichier PDF valide.")
-
-def test_process_pdf_exception_handling(mock_dependencies):
-    """Tests the 'except Exception' block for full SonarQube coverage."""
-    # Setup: Force an error during PDF processing
-    mock_dependencies["is_valid"].return_value = True
-    mock_dependencies["to_markdown"].side_effect = Exception("Crash test")
-    
-    # Act
-    result = front_functions.process_pdf("file", "file.pdf", MagicMock())
-    
-    # Assert
-    assert result is None
-    import streamlit as st
-    st.error.assert_called()
+    assert language == "French"
+    assert pages == (1, 1) # Default value when slider isn't called
