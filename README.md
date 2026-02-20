@@ -1,35 +1,76 @@
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import patch, MagicMock
+import front_functions
 
-def test_summary_options_multi_page(mocker):
-    # 1. Mock the PDF utility to return more than 1 page
-    mocker.patch("front_functions.pdf_num_pages", return_value=5)
-    
-    # 2. Mock Streamlit widgets to return specific user choices
-    mocker.patch("streamlit.radio", return_value="Résumé court")
-    mocker.patch("streamlit.selectbox", return_value="Anglais")
-    # This mock ensures the slider branch is executed and covered
-    mocker.patch("streamlit.slider", return_value=(1, 3))
-    
-    # 3. Create a dummy file object
-    mock_pdf = MagicMock()
-    
-    # 4. Call the function
-    from front_functions import summary_options
-    types, language, pages = summary_options(mock_pdf)
-    
-    # 5. Assertions
-    assert types == "Résumé court"
-    assert language == "English"  # Because options["Anglais"] == "English"
-    assert pages == (1, 3)
+# 1. Setup a fixture to handle all the common mocks
+@pytest.fixture
+def mock_pdf_env():
+    with patch("front_functions.is_valid_pdf") as mock_valid, \
+         patch("pymupdf4llm.to_markdown") as mock_to_md, \
+         patch("front_functions.ProcesseurLangChain") as mock_langchain, \
+         patch("streamlit.error") as mock_st_error, \
+         patch("streamlit.sidebar") as mock_st_sidebar:
+        
+        yield {
+            "valid": mock_valid,
+            "to_md": mock_to_md,
+            "langchain": mock_langchain,
+            "st_error": mock_st_error,
+            "st_sidebar": mock_st_sidebar
+        }
 
-def test_summary_options_single_page(mocker):
-    mocker.patch("front_functions.pdf_num_pages", return_value=1)
-    mocker.patch("streamlit.radio", return_value="Résumé long")
-    mocker.patch("streamlit.selectbox", return_value="Francais")
+# --- TEST CASES ---
+
+def test_process_pdf_success(mock_pdf_env):
+    """Tests the full successful flow of PDF processing."""
+    # Setup Mocks
+    mock_pdf_env["valid"].return_value = True
+    mock_pdf_env["to_md"].return_value = [
+        {"metadata": {"page": 1}, "text": "Page 1 content"},
+        {"metadata": {"page": 2}, "text": "Page 2 content"}
+    ]
     
-    mock_pdf = MagicMock()
-    types, language, pages = summary_options(mock_pdf)
+    # Mock the LangChain processor instance and its method
+    mock_processor_inst = MagicMock()
+    mock_processor_inst.traiter_chaine.return_value = "This is a summary."
+    mock_pdf_env["langchain"].return_value = mock_processor_inst
+
+    # Execution
+    mock_file = MagicMock()
+    mock_config = MagicMock()
+    mock_config.execution_locale = True # Triggers the local auth branch
     
-    assert language == "French"
-    assert pages == (1, 1) # Default value when slider isn't called
+    result = front_functions.process_pdf(mock_file, "Summary", "English", (1, 2), mock_config)
+
+    # Assertions
+    assert result == "This is a summary."
+    mock_processor_inst.traiter_chaine.assert_called_once()
+    # Check if text from both pages was concatenated
+    assert "Page 1 content" in mock_processor_inst.traiter_chaine.call_args[0][0]
+
+def test_process_pdf_invalid_file(mock_pdf_env):
+    """Tests the 'if not is_valid_pdf' branch."""
+    mock_pdf_env["valid"].return_value = False
+    
+    mock_file = MagicMock()
+    mock_config = MagicMock()
+    
+    result = front_functions.process_pdf(mock_file, "Summary", "French", (1, 1), mock_config)
+    
+    assert result is None
+    mock_pdf_env["st_error"].assert_called_with("Fichier PDF non valide.")
+
+def test_process_pdf_exception_handling(mock_pdf_env):
+    """Tests the 'except Exception' block for SonarQube coverage."""
+    mock_pdf_env["valid"].return_value = True
+    # Force an error during PDF parsing
+    mock_pdf_env["to_md"].side_effect = Exception("Parsing Error")
+    
+    mock_file = MagicMock()
+    mock_config = MagicMock()
+    
+    result = front_functions.process_pdf(mock_file, "Summary", "French", (1, 1), mock_config)
+    
+    assert result is None
+    # Verify the error was reported to the user
+    assert mock_pdf_env["st_error"].called
