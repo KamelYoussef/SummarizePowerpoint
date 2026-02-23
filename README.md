@@ -1,76 +1,47 @@
 import pytest
 from unittest.mock import patch, MagicMock
-import front_functions
+# Replace 'your_module' with the actual name of your python file
+from your_module import display_summary
 
-# 1. Setup a fixture to handle all the common mocks
-@pytest.fixture
-def mock_pdf_env():
-    with patch("front_functions.is_valid_pdf") as mock_valid, \
-         patch("pymupdf4llm.to_markdown") as mock_to_md, \
-         patch("front_functions.ProcesseurLangChain") as mock_langchain, \
-         patch("streamlit.error") as mock_st_error, \
-         patch("streamlit.sidebar") as mock_st_sidebar:
+class TestDisplaySummary:
+
+    @patch("your_module.st")
+    def test_display_summary_standard_text(self, mock_st):
+        """Test with a standard string to ensure word count and HTML rendering."""
+        sample_text = "This is a test summary."
         
-        yield {
-            "valid": mock_valid,
-            "to_md": mock_to_md,
-            "langchain": mock_langchain,
-            "st_error": mock_st_error,
-            "st_sidebar": mock_st_sidebar
-        }
+        display_summary(sample_text)
 
-# --- TEST CASES ---
+        # Check if word count is calculated correctly (5 words)
+        mock_st.write.assert_called_once_with("Résumé du PDF: (5 mots)")
+        
+        # Verify markdown was called with HTML containing the text
+        args, kwargs = mock_st.markdown.call_args
+        assert "This is a test summary." in args[0]
+        assert "height:800px" in args[0]
+        assert kwargs["unsafe_allow_html"] is True
 
-def test_process_pdf_success(mock_pdf_env):
-    """Tests the full successful flow of PDF processing."""
-    # Setup Mocks
-    mock_pdf_env["valid"].return_value = True
-    mock_pdf_env["to_md"].return_value = [
-        {"metadata": {"page": 1}, "text": "Page 1 content"},
-        {"metadata": {"page": 2}, "text": "Page 2 content"}
-    ]
-    
-    # Mock the LangChain processor instance and its method
-    mock_processor_inst = MagicMock()
-    mock_processor_inst.traiter_chaine.return_value = "This is a summary."
-    mock_pdf_env["langchain"].return_value = mock_processor_inst
+    @patch("your_module.st")
+    def test_display_summary_empty_string(self, mock_st):
+        """Test with an empty string to check edge case behavior."""
+        display_summary("")
 
-    # Execution
-    mock_file = MagicMock()
-    mock_config = MagicMock()
-    mock_config.execution_locale = True # Triggers the local auth branch
-    
-    result = front_functions.process_pdf(mock_file, "Summary", "English", (1, 2), mock_config)
+        # Word count should be 0
+        mock_st.write.assert_called_once_with("Résumé du PDF: (0 mots)")
+        mock_st.markdown.assert_called_once()
 
-    # Assertions
-    assert result == "This is a summary."
-    mock_processor_inst.traiter_chaine.assert_called_once()
-    # Check if text from both pages was concatenated
-    assert "Page 1 content" in mock_processor_inst.traiter_chaine.call_args[0][0]
+    @patch("your_module.st")
+    def test_display_summary_whitespace_only(self, mock_st):
+        """Test with only spaces/newlines."""
+        display_summary("   \n   ")
 
-def test_process_pdf_invalid_file(mock_pdf_env):
-    """Tests the 'if not is_valid_pdf' branch."""
-    mock_pdf_env["valid"].return_value = False
-    
-    mock_file = MagicMock()
-    mock_config = MagicMock()
-    
-    result = front_functions.process_pdf(mock_file, "Summary", "French", (1, 1), mock_config)
-    
-    assert result is None
-    mock_pdf_env["st_error"].assert_called_with("Fichier PDF non valide.")
+        # split() without arguments handles arbitrary whitespace, resulting in 0 words
+        mock_st.write.assert_called_once_with("Résumé du PDF: (0 mots)")
 
-def test_process_pdf_exception_handling(mock_pdf_env):
-    """Tests the 'except Exception' block for SonarQube coverage."""
-    mock_pdf_env["valid"].return_value = True
-    # Force an error during PDF parsing
-    mock_pdf_env["to_md"].side_effect = Exception("Parsing Error")
-    
-    mock_file = MagicMock()
-    mock_config = MagicMock()
-    
-    result = front_functions.process_pdf(mock_file, "Summary", "French", (1, 1), mock_config)
-    
-    assert result is None
-    # Verify the error was reported to the user
-    assert mock_pdf_env["st_error"].called
+    @patch("your_module.st")
+    def test_display_summary_large_text(self, mock_st):
+        """Test with a larger text input."""
+        large_text = "word " * 100
+        display_summary(large_text.strip())
+
+        mock_st.write.assert_called_once_with("Résumé du PDF: (100 mots)")
