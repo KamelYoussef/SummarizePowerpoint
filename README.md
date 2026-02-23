@@ -1,55 +1,63 @@
 import pytest
 from unittest.mock import MagicMock, patch
 # Replace 'your_module' with the actual name of your python file
-from your_module import pdf_num_pages
+from your_module import summary_options
 
-class TestPdfNumPages:
+class TestSummaryOptions:
 
-    @patch("your_module.fitz.open")
-    def test_pdf_num_pages_success(self, mock_fitz_open):
-        """Test successful page count retrieval and stream reset."""
-        # 1. Mock the Streamlit UploadedFile
-        mock_uploaded_file = MagicMock()
-        mock_uploaded_file.read.return_value = b"fake pdf content"
-        
-        # 2. Mock the fitz context manager and its page_count attribute
+    @patch("your_module.pdf_num_pages")
+    @patch("your_module.st")
+    def test_summary_options_multi_page(self, mock_st, mock_pdf_num):
+        """Test with a multi-page PDF to ensure the slider is triggered."""
+        # Setup mocks
         mock_pdf_doc = MagicMock()
-        mock_pdf_doc.page_count = 5
-        # This handles the 'with fitz.open(...) as file:' pattern
-        mock_fitz_open.return_value.__enter__.return_value = mock_pdf_doc
+        mock_pdf_num.return_value = 10
+        mock_st.radio.return_value = "Résumé long"
+        mock_st.selectbox.return_value = "Francais"
+        mock_st.slider.return_value = (1, 5)
 
         # Execute
-        result = pdf_num_pages(mock_uploaded_file)
+        res_type, res_lang, res_pages = summary_options(mock_pdf_doc)
 
-        # 3. Assertions
-        assert result == 5
-        # Verify fitz.open was called with correct byte data
-        mock_fitz_open.assert_called_once_with("pdf", b"fake pdf content")
-        # Verify doc.seek(0) was called to reset the stream for future use
-        mock_uploaded_file.seek.assert_called_once_with(0)
-
-    @patch("your_module.fitz.open")
-    def test_pdf_num_pages_empty_file(self, mock_fitz_open):
-        """Test behavior when the PDF has 0 pages or is empty."""
-        mock_uploaded_file = MagicMock()
-        mock_uploaded_file.read.return_value = b""
+        # Assertions
+        assert res_type == "Résumé long"
+        assert res_lang == "French"
+        assert res_pages == (1, 5)
         
+        # Ensure slider was called because num_pages > 1
+        mock_st.slider.assert_called_once_with(
+            "Selection des pages ", 1, 10, (1, 10)
+        )
+
+    @patch("your_module.pdf_num_pages")
+    @patch("your_module.st")
+    def test_summary_options_single_page(self, mock_st, mock_pdf_num):
+        """Test with a single-page PDF to ensure the slider is skipped."""
+        # Setup mocks
         mock_pdf_doc = MagicMock()
-        mock_pdf_doc.page_count = 0
-        mock_fitz_open.return_value.__enter__.return_value = mock_pdf_doc
+        mock_pdf_num.return_value = 1
+        mock_st.radio.return_value = "Résumé court"
+        mock_st.selectbox.return_value = "Anglais"
 
-        result = pdf_num_pages(mock_uploaded_file)
+        # Execute
+        res_type, res_lang, res_pages = summary_options(mock_pdf_doc)
 
-        assert result == 0
-        mock_uploaded_file.seek.assert_called_once_with(0)
+        # Assertions
+        assert res_type == "Résumé court"
+        assert res_lang == "English"
+        assert res_pages == (1, 1) # Default value from the code
+        
+        # Ensure slider was NOT called because num_pages is not > 1
+        mock_st.slider.assert_not_called()
 
-    @patch("your_module.fitz.open")
-    def test_pdf_num_pages_exception_handling(self, mock_fitz_open):
-        """Ensure seek(0) is called even if fitz raises an error (if applicable)."""
-        # Note: In your current code, if fitz.open fails, it won't hit seek(0).
-        # This test checks if the function crashes as expected on corrupt data.
-        mock_uploaded_file = MagicMock()
-        mock_fitz_open.side_effect = Exception("Corrupt PDF")
-
-        with pytest.raises(Exception, match="Corrupt PDF"):
-            pdf_num_pages(mock_uploaded_file)
+    @patch("your_module.pdf_num_pages")
+    @patch("your_module.st")
+    def test_summary_options_mapping(self, mock_st, mock_pdf_num):
+        """Verify the language dictionary mapping is working correctly."""
+        mock_pdf_num.return_value = 1
+        mock_st.selectbox.return_value = "Anglais"
+        
+        _, res_lang, _ = summary_options(MagicMock())
+        
+        # Confirms "Anglais" correctly maps to "English"
+        assert res_lang == "English"
