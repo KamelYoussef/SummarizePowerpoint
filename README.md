@@ -1,63 +1,55 @@
 import pytest
-from unittest.mock import MagicMock, patch
-# Replace 'your_module' with the actual name of your python file
-from your_module import summary_options
+from unittest.mock import MagicMock, patch, mock_open
+# Replace 'your_module' with the actual module name
+from your_module import init_streamlit
 
-class TestSummaryOptions:
+class TestInitStreamlit:
 
-    @patch("your_module.pdf_num_pages")
     @patch("your_module.st")
-    def test_summary_options_multi_page(self, mock_st, mock_pdf_num):
-        """Test with a multi-page PDF to ensure the slider is triggered."""
-        # Setup mocks
-        mock_pdf_doc = MagicMock()
-        mock_pdf_num.return_value = 10
-        mock_st.radio.return_value = "Résumé long"
-        mock_st.selectbox.return_value = "Francais"
-        mock_st.slider.return_value = (1, 5)
-
-        # Execute
-        res_type, res_lang, res_pages = summary_options(mock_pdf_doc)
-
-        # Assertions
-        assert res_type == "Résumé long"
-        assert res_lang == "French"
-        assert res_pages == (1, 5)
+    def test_init_streamlit_unauthorized(self, mock_st):
+        """Test that execution stops if the user is not authorized."""
+        # Setup mock authorization object
+        mock_auth = MagicMock()
+        mock_auth.est_autorise.return_value = False
         
-        # Ensure slider was called because num_pages > 1
-        mock_st.slider.assert_called_once_with(
-            "Selection des pages ", 1, 10, (1, 10)
+        # Streamlit's st.stop() usually raises an exception to halt the script
+        mock_st.stop.side_effect = Exception("Streamlit Stopped")
+
+        with pytest.raises(Exception, match="Streamlit Stopped"):
+            init_streamlit(mock_auth)
+
+        # Verify error message was shown
+        mock_st.error.assert_called_once_with(
+            body="Vous n'êtes pas autorisé à accéder cette page.", 
+            icon="🚨"
         )
+        # Ensure layout columns were never created
+        mock_st.columns.assert_not_called()
 
-    @patch("your_module.pdf_num_pages")
     @patch("your_module.st")
-    def test_summary_options_single_page(self, mock_st, mock_pdf_num):
-        """Test with a single-page PDF to ensure the slider is skipped."""
-        # Setup mocks
-        mock_pdf_doc = MagicMock()
-        mock_pdf_num.return_value = 1
-        mock_st.radio.return_value = "Résumé court"
-        mock_st.selectbox.return_value = "Anglais"
+    def test_init_streamlit_authorized_success(self, mock_st):
+        """Test full initialization when user is authorized."""
+        # 1. Mock Authorization
+        mock_auth = MagicMock()
+        mock_auth.est_autorise.return_value = True
+        
+        # 2. Mock CSS file reading
+        fake_css = "body { background-color: red; }"
+        
+        # 3. Mock columns return values
+        mock_col1, mock_col2 = MagicMock(), MagicMock()
+        mock_st.columns.return_value = [mock_col1, mock_col2]
 
-        # Execute
-        res_type, res_lang, res_pages = summary_options(mock_pdf_doc)
+        # Use mock_open to simulate the external CSS file
+        with patch("builtins.open", mock_open(read_data=fake_css)):
+            c1, c2 = init_streamlit(mock_auth)
 
         # Assertions
-        assert res_type == "Résumé court"
-        assert res_lang == "English"
-        assert res_pages == (1, 1) # Default value from the code
-        
-        # Ensure slider was NOT called because num_pages is not > 1
-        mock_st.slider.assert_not_called()
-
-    @patch("your_module.pdf_num_pages")
-    @patch("your_module.st")
-    def test_summary_options_mapping(self, mock_st, mock_pdf_num):
-        """Verify the language dictionary mapping is working correctly."""
-        mock_pdf_num.return_value = 1
-        mock_st.selectbox.return_value = "Anglais"
-        
-        _, res_lang, _ = summary_options(MagicMock())
-        
-        # Confirms "Anglais" correctly maps to "English"
-        assert res_lang == "English"
+        mock_st.set_page_config.assert_called_once_with(
+            page_title="Résumé PDF", page_icon=":books:", layout="wide"
+        )
+        mock_st.markdown.assert_called_with(
+            f"<style>{fake_css}</style>", unsafe_allow_html=True
+        )
+        assert c1 == mock_col1
+        assert c2 == mock_col2
