@@ -1,74 +1,79 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, mock_open
+import time
+
 # Replace 'your_module' with the actual module name
-from your_module import process_pdf
+from your_module import app
 
-class TestProcessPdf:
+class TestMainApp:
 
-    @patch("your_module.is_valid_pdf")
-    @patch("your_module.pymupdf4llm.to_markdown")
-    @patch("your_module.ProcesseurLangChain")
     @patch("your_module.st")
-    def test_process_pdf_success(self, mock_st, mock_langchain, mock_to_md, mock_is_valid):
-        """Test the full successful processing pipeline."""
-        # 1. Setup Mocks
-        mock_is_valid.return_value = True
-        mock_to_md.return_value = [
-            {"metadata": {"page": 1}, "text": "Hello World"},
-            {"metadata": {"page": 2}, "text": "Streamlit is great"}
-        ]
+    @patch("your_module.load_dotenv")
+    @patch("your_module.app_config")
+    @patch("your_module.init_streamlit")
+    @patch("your_module.summary_options")
+    @patch("your_module.process_pdf")
+    @patch("your_module.fitz.open")
+    @patch("your_module.pdf_viewer")
+    @patch("your_module.display_summary")
+    @patch("your_module.os.path.exists")
+    @patch("your_module.os.remove")
+    def test_app_full_flow_success(self, mock_remove, mock_exists, mock_display, 
+                                   mock_viewer, mock_fitz, mock_process, 
+                                   mock_options, mock_init, mock_config, 
+                                   mock_dotenv, mock_st):
+        """Test the complete successful flow of the application."""
         
-        # Mock the LangChain processor and its return value
-        mock_instance = MagicMock()
-        mock_instance.traiter_chaine.return_value = "This is a summary."
-        mock_langchain.return_value = mock_instance
-
-        # 2. Execute
-        config = MagicMock(execution_locale=False)
-        result = process_pdf("mock_file", "test.pdf", config, "English", "Résumé long")
-
-        # 3. Assertions
-        assert result == "This is a summary."
-        mock_to_md.assert_called_once_with("test.pdf", page_chunks=True)
-        # Verify the text aggregation logic (Page headers should be in the text)
-        args, _ = mock_instance.traiter_chaine.call_args
-        assert "----- Page 1 ---" in args[0]
-        assert "Hello World" in args[0]
-
-    @patch("your_module.is_valid_pdf")
-    @patch("your_module.st")
-    def test_process_pdf_invalid(self, mock_st, mock_is_valid):
-        """Test the 'if not is_valid_pdf' branch."""
-        mock_is_valid.return_value = False
+        # 1. Setup Mocks for initialization
+        mock_init.return_value = (MagicMock(), MagicMock()) # col1, col2
+        mock_exists.return_value = True
         
-        result = process_pdf("bad_file", "bad.pdf", MagicMock(), "English", "Résumé court")
+        # 2. Mock sidebar file upload
+        mock_pdf_doc = MagicMock()
+        mock_pdf_doc.read.return_value = b"pdf content"
+        mock_st.file_uploader.return_value = mock_pdf_doc
+        
+        # 3. Mock user interactions (Buttons and Options)
+        mock_options.return_value = ("Résumé long", "English", (1, 2))
+        # Simulate 'Commencer' button being pressed (returns True)
+        mock_st.button.side_effect = lambda label: label == "Commencer"
+        
+        # 4. Mock PDF processing and file saving
+        mock_process.return_value = "This is the final summary."
+        mock_doc_instance = MagicMock()
+        mock_fitz.return_value = mock_doc_instance
 
-        assert result is None
-        mock_st.error.assert_called_once_with("Veuillez sélectionner un fichier PDF valide.")
+        # 5. Execute with mocked logging.yaml
+        with patch("builtins.open", mock_open(read_data="version: 1")):
+            app()
 
-    @patch("your_module.is_valid_pdf")
+        # --- ASSERTIONS ---
+        # Verify environment loading
+        mock_dotenv.assert_any_call("app.env", override=True)
+        
+        # Verify file processing logic
+        mock_process.assert_called_once()
+        mock_fitz.assert_called_once()
+        mock_doc_instance.select.assert_called_once()
+        mock_doc_instance.save.assert_called_once()
+        
+        # Verify display components
+        mock_viewer.assert_called_once()
+        mock_display.assert_called_once_with("This is the final summary.")
+        
+        # Verify cleanup
+        mock_remove.assert_called_once()
+
     @patch("your_module.st")
-    @patch("your_module.logging")
-    def test_process_pdf_exception(self, mock_logging, mock_st, mock_is_valid):
-        """Test the 'except Exception' block for SonarQube error coverage."""
-        mock_is_valid.side_effect = Exception("System Crash")
-
-        result = process_pdf("file", "filename", MagicMock(), "English", "Résumé long")
-
-        assert result is None
-        mock_logging.exception.assert_called_once()
-        mock_st.error.assert_called_with("Une erreur est survenue lors du traitement du fichier PDF.")
-
-    @patch("your_module.is_valid_pdf")
-    @patch("your_module.rq_ia")
-    @patch("your_module.ProcesseurLangChain")
-    def test_process_pdf_execution_locale(self, mock_langchain, mock_rq_ia, mock_is_valid):
-        """Test the conditional logic for config.execution_locale."""
-        mock_is_valid.return_value = True
-        # Mocking to skip the middle logic
-        with patch("your_module.pymupdf4llm.to_markdown", return_value=[]):
-            config = MagicMock(execution_locale=True, palier="test_palier")
-            process_pdf("file", "name", config)
-            
-            # Verify the authentifier call inside the if block
-            mock_rq_ia.authentifier.assert_called_once()
+    @patch("your_module.init_streamlit")
+    def test_app_no_file_uploaded(self, mock_init, mock_st):
+        """Test app state when no file is uploaded (branch coverage)."""
+        mock_init.return_value = (MagicMock(), MagicMock())
+        mock_st.file_uploader.return_value = None # No file
+        
+        with patch("builtins.open", mock_open(read_data="version: 1")):
+            with patch("your_module.load_dotenv"):
+                app()
+        
+        # Verify that processing was never triggered
+        mock_st.button.assert_not_called()
