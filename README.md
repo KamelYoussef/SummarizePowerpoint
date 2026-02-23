@@ -1,47 +1,55 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 # Replace 'your_module' with the actual name of your python file
-from your_module import display_summary
+from your_module import pdf_num_pages
 
-class TestDisplaySummary:
+class TestPdfNumPages:
 
-    @patch("your_module.st")
-    def test_display_summary_standard_text(self, mock_st):
-        """Test with a standard string to ensure word count and HTML rendering."""
-        sample_text = "This is a test summary."
+    @patch("your_module.fitz.open")
+    def test_pdf_num_pages_success(self, mock_fitz_open):
+        """Test successful page count retrieval and stream reset."""
+        # 1. Mock the Streamlit UploadedFile
+        mock_uploaded_file = MagicMock()
+        mock_uploaded_file.read.return_value = b"fake pdf content"
         
-        display_summary(sample_text)
+        # 2. Mock the fitz context manager and its page_count attribute
+        mock_pdf_doc = MagicMock()
+        mock_pdf_doc.page_count = 5
+        # This handles the 'with fitz.open(...) as file:' pattern
+        mock_fitz_open.return_value.__enter__.return_value = mock_pdf_doc
 
-        # Check if word count is calculated correctly (5 words)
-        mock_st.write.assert_called_once_with("Résumé du PDF: (5 mots)")
+        # Execute
+        result = pdf_num_pages(mock_uploaded_file)
+
+        # 3. Assertions
+        assert result == 5
+        # Verify fitz.open was called with correct byte data
+        mock_fitz_open.assert_called_once_with("pdf", b"fake pdf content")
+        # Verify doc.seek(0) was called to reset the stream for future use
+        mock_uploaded_file.seek.assert_called_once_with(0)
+
+    @patch("your_module.fitz.open")
+    def test_pdf_num_pages_empty_file(self, mock_fitz_open):
+        """Test behavior when the PDF has 0 pages or is empty."""
+        mock_uploaded_file = MagicMock()
+        mock_uploaded_file.read.return_value = b""
         
-        # Verify markdown was called with HTML containing the text
-        args, kwargs = mock_st.markdown.call_args
-        assert "This is a test summary." in args[0]
-        assert "height:800px" in args[0]
-        assert kwargs["unsafe_allow_html"] is True
+        mock_pdf_doc = MagicMock()
+        mock_pdf_doc.page_count = 0
+        mock_fitz_open.return_value.__enter__.return_value = mock_pdf_doc
 
-    @patch("your_module.st")
-    def test_display_summary_empty_string(self, mock_st):
-        """Test with an empty string to check edge case behavior."""
-        display_summary("")
+        result = pdf_num_pages(mock_uploaded_file)
 
-        # Word count should be 0
-        mock_st.write.assert_called_once_with("Résumé du PDF: (0 mots)")
-        mock_st.markdown.assert_called_once()
+        assert result == 0
+        mock_uploaded_file.seek.assert_called_once_with(0)
 
-    @patch("your_module.st")
-    def test_display_summary_whitespace_only(self, mock_st):
-        """Test with only spaces/newlines."""
-        display_summary("   \n   ")
+    @patch("your_module.fitz.open")
+    def test_pdf_num_pages_exception_handling(self, mock_fitz_open):
+        """Ensure seek(0) is called even if fitz raises an error (if applicable)."""
+        # Note: In your current code, if fitz.open fails, it won't hit seek(0).
+        # This test checks if the function crashes as expected on corrupt data.
+        mock_uploaded_file = MagicMock()
+        mock_fitz_open.side_effect = Exception("Corrupt PDF")
 
-        # split() without arguments handles arbitrary whitespace, resulting in 0 words
-        mock_st.write.assert_called_once_with("Résumé du PDF: (0 mots)")
-
-    @patch("your_module.st")
-    def test_display_summary_large_text(self, mock_st):
-        """Test with a larger text input."""
-        large_text = "word " * 100
-        display_summary(large_text.strip())
-
-        mock_st.write.assert_called_once_with("Résumé du PDF: (100 mots)")
+        with pytest.raises(Exception, match="Corrupt PDF"):
+            pdf_num_pages(mock_uploaded_file)
