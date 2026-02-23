@@ -1,55 +1,74 @@
 import pytest
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 # Replace 'your_module' with the actual module name
-from your_module import init_streamlit
+from your_module import process_pdf
 
-class TestInitStreamlit:
+class TestProcessPdf:
 
+    @patch("your_module.is_valid_pdf")
+    @patch("your_module.pymupdf4llm.to_markdown")
+    @patch("your_module.ProcesseurLangChain")
     @patch("your_module.st")
-    def test_init_streamlit_unauthorized(self, mock_st):
-        """Test that execution stops if the user is not authorized."""
-        # Setup mock authorization object
-        mock_auth = MagicMock()
-        mock_auth.est_autorise.return_value = False
+    def test_process_pdf_success(self, mock_st, mock_langchain, mock_to_md, mock_is_valid):
+        """Test the full successful processing pipeline."""
+        # 1. Setup Mocks
+        mock_is_valid.return_value = True
+        mock_to_md.return_value = [
+            {"metadata": {"page": 1}, "text": "Hello World"},
+            {"metadata": {"page": 2}, "text": "Streamlit is great"}
+        ]
         
-        # Streamlit's st.stop() usually raises an exception to halt the script
-        mock_st.stop.side_effect = Exception("Streamlit Stopped")
+        # Mock the LangChain processor and its return value
+        mock_instance = MagicMock()
+        mock_instance.traiter_chaine.return_value = "This is a summary."
+        mock_langchain.return_value = mock_instance
 
-        with pytest.raises(Exception, match="Streamlit Stopped"):
-            init_streamlit(mock_auth)
+        # 2. Execute
+        config = MagicMock(execution_locale=False)
+        result = process_pdf("mock_file", "test.pdf", config, "English", "Résumé long")
 
-        # Verify error message was shown
-        mock_st.error.assert_called_once_with(
-            body="Vous n'êtes pas autorisé à accéder cette page.", 
-            icon="🚨"
-        )
-        # Ensure layout columns were never created
-        mock_st.columns.assert_not_called()
+        # 3. Assertions
+        assert result == "This is a summary."
+        mock_to_md.assert_called_once_with("test.pdf", page_chunks=True)
+        # Verify the text aggregation logic (Page headers should be in the text)
+        args, _ = mock_instance.traiter_chaine.call_args
+        assert "----- Page 1 ---" in args[0]
+        assert "Hello World" in args[0]
 
+    @patch("your_module.is_valid_pdf")
     @patch("your_module.st")
-    def test_init_streamlit_authorized_success(self, mock_st):
-        """Test full initialization when user is authorized."""
-        # 1. Mock Authorization
-        mock_auth = MagicMock()
-        mock_auth.est_autorise.return_value = True
+    def test_process_pdf_invalid(self, mock_st, mock_is_valid):
+        """Test the 'if not is_valid_pdf' branch."""
+        mock_is_valid.return_value = False
         
-        # 2. Mock CSS file reading
-        fake_css = "body { background-color: red; }"
-        
-        # 3. Mock columns return values
-        mock_col1, mock_col2 = MagicMock(), MagicMock()
-        mock_st.columns.return_value = [mock_col1, mock_col2]
+        result = process_pdf("bad_file", "bad.pdf", MagicMock(), "English", "Résumé court")
 
-        # Use mock_open to simulate the external CSS file
-        with patch("builtins.open", mock_open(read_data=fake_css)):
-            c1, c2 = init_streamlit(mock_auth)
+        assert result is None
+        mock_st.error.assert_called_once_with("Veuillez sélectionner un fichier PDF valide.")
 
-        # Assertions
-        mock_st.set_page_config.assert_called_once_with(
-            page_title="Résumé PDF", page_icon=":books:", layout="wide"
-        )
-        mock_st.markdown.assert_called_with(
-            f"<style>{fake_css}</style>", unsafe_allow_html=True
-        )
-        assert c1 == mock_col1
-        assert c2 == mock_col2
+    @patch("your_module.is_valid_pdf")
+    @patch("your_module.st")
+    @patch("your_module.logging")
+    def test_process_pdf_exception(self, mock_logging, mock_st, mock_is_valid):
+        """Test the 'except Exception' block for SonarQube error coverage."""
+        mock_is_valid.side_effect = Exception("System Crash")
+
+        result = process_pdf("file", "filename", MagicMock(), "English", "Résumé long")
+
+        assert result is None
+        mock_logging.exception.assert_called_once()
+        mock_st.error.assert_called_with("Une erreur est survenue lors du traitement du fichier PDF.")
+
+    @patch("your_module.is_valid_pdf")
+    @patch("your_module.rq_ia")
+    @patch("your_module.ProcesseurLangChain")
+    def test_process_pdf_execution_locale(self, mock_langchain, mock_rq_ia, mock_is_valid):
+        """Test the conditional logic for config.execution_locale."""
+        mock_is_valid.return_value = True
+        # Mocking to skip the middle logic
+        with patch("your_module.pymupdf4llm.to_markdown", return_value=[]):
+            config = MagicMock(execution_locale=True, palier="test_palier")
+            process_pdf("file", "name", config)
+            
+            # Verify the authentifier call inside the if block
+            mock_rq_ia.authentifier.assert_called_once()
