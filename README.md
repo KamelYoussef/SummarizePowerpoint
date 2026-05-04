@@ -1,37 +1,126 @@
-Voici un résumé détaillé des six séances du cours de macroéconomie, basé sur les sources fournies :
+Voici la version française, structurée pour être pédagogique et compréhensible pour un client non technique, tout en restant simple à exécuter dans un notebook Jupyter.
 
-### Séance 1 : Langage et concepts macroéconomiques
-Cette séance définit la macroéconomie comme l'étude de la vue d'ensemble de l'économie (tendances de long terme et fluctuations de court terme) plutôt que des marchés isolés.
-*   **Le PIB (Produit Intérieur Brut) :** Il mesure la valeur marchande totale de tous les biens et services finaux produits dans un pays sur une période donnée. On peut le calculer selon trois approches équivalentes : les **dépenses** ($Y = C + I + G + NX$), les **revenus** (salaires, profits) et la **valeur ajoutée**.
-*   **Composantes du PIB :** La **consommation (C)** est la plus grande part (~60 % au Canada), tandis que l'**investissement (I)** est la plus volatile.
-*   **PIB Réel vs Nominal :** Le PIB réel utilise des prix constants pour isoler la croissance des quantités de l'inflation.
-*   **Limites :** Le PIB omet les activités non marchandes (bénévolat, production domestique) et ne mesure pas directement le bien-être ou les inégalités.
+📘 Notebook : Simulation d’une décision de crédit d’impôt (Régression Logistique)
 
-### Séance 2 : Croissance de long terme
-La croissance économique transforme les sociétés de manière spectaculaire sur le long terme.
-*   **Fonction de production :** Modélisée par l'équation Cobb-Douglas $Y = A \cdot K^\alpha \cdot L^{1-\alpha}$, où **A** est la Productivité Totale des Facteurs (PTF), **K** le capital et **L** le travail.
-*   **Productivité (A) :** Elle capte l'efficience (technologie, gestion) et explique environ 50 % des écarts de richesse entre les pays.
-*   **Modèle de Solow :** Ce modèle montre que l'accumulation de capital ($K$) ne peut pas soutenir la croissance indéfiniment à cause des **rendements marginaux décroissants**. Les pays connaissent une "phase de rattrapage" rapide par l'investissement, mais à long terme (état stationnaire), seule la productivité ($A$) permet une croissance durable.
+🧠 1. Objectif
+Nous simulons le fonctionnement d’une administration fiscale (comme Revenu Québec) qui doit décider :
+👉 Accorder (1) ou refuser (0) un crédit d’impôt à une entreprise
+Ce notebook va :
+* Créer un jeu de données artificiel
+* Expliquer chaque variable simplement
+* Entraîner un modèle de régression logistique
+* Faire des prédictions
 
-### Séance 3 : Marché du travail, inégalités et technologie
-*   **Indicateurs :** La santé du marché est mesurée par les taux d'activité, d'emploi et de chômage. Un chômeur est défini comme une personne sans emploi, disponible et en recherche active.
-*   **Rigidité des salaires :** À court terme, les salaires nominaux résistent à la baisse (conventions, moral), ce qui explique pourquoi les entreprises préfèrent licencier plutôt que réduire les salaires en récession.
-*   **Inégalités :** Elles augmentent à l'intérieur des pays à cause du **progrès technologique asymétrique** (favorisant les travailleurs qualifiés) et de l'automatisation.
-*   **Maladie des coûts de Baumol :** Les prix montent dans les secteurs difficiles à automatiser (santé, éducation) car ils doivent s'aligner sur les salaires des secteurs productifs.
+📦 2. Import des bibliothèques
+import pandas as pd
+import numpy as np
 
-### Séance 4 : Cycles économiques et modèle AD-AS
-L'économie oscille entre expansions et récessions (deux trimestres de croissance négative).
-*   **PIB Potentiel ($Y^{POT}$) :** C'est le niveau de production "vitesse de croisière" de l'économie. L'**écart de production** mesure la distance entre le PIB réel et ce potentiel.
-*   **Modèle AD-AS :** La **Demande Agrégée (AD)** a une pente négative (effet de richesse), et l'**Offre Agrégée (AS)** a une pente positive à court terme à cause des salaires rigides.
-*   **Chocs :** Un **choc de demande** (ex: COVID 2020) fait baisser à la fois $Y$ et les prix. Un **choc d'offre** (ex: hausse du pétrole) provoque de la **stagflation** ($Y \downarrow$ et $P \uparrow$).
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
 
-### Séance 5 : Politiques de stabilisation
-*   **Politique Monétaire :** La Banque du Canada utilise le **taux directeur** pour atteindre une cible d'inflation de 2 %. Baisser les taux stimule $C$, $I$ et $NX$ pour déplacer AD vers la droite. En période de crise, elle utilise des outils non conventionnels comme l'**assouplissement quantitatif (QE)**.
-*   **Politique Budgétaire :** Le gouvernement utilise les dépenses ($G$), les impôts et les transferts. Les **déficits jumeaux** montrent qu'un déficit budgétaire tend à creuser le déficit commercial.
-*   **Dette Publique :** L'accumulation des déficits crée la dette. Au Canada, la dette nette est relativement faible par rapport à la dette brute.
+🏗️ 3. Création d’un jeu de données artificiel
+np.random.seed(42)
 
-### Séance 6 : Commerce international et économie ouverte
-*   **Identité fondamentale :** Le compte courant (CA) est égal à l'épargne nationale ($S$) moins l'investissement ($I$) : **$CA = S - I$**.
-*   **Déficit commercial :** Il reflète un manque d'épargne par rapport aux besoins d'investissement, pas nécessairement un manque de compétitivité.
-*   **Excès d'épargne mondiale :** L'épargne massive de pays comme la Chine a contribué à baisser les taux d'intérêt mondiaux et à financer les déficits américains.
-*   **Tarifs douaniers :** Ils ne corrigent généralement pas le déficit commercial global car ils ne modifient pas durablement $S$ ou $I$ ; ils ne font que changer la composition du commerce tout en risquant de provoquer de la stagflation.
+n = 200
+
+data = pd.DataFrame({
+    "taille_entreprise": np.random.choice([1, 2, 3], n),  # 1=petite, 2=moyenne, 3=grande
+    "annees_activite": np.random.randint(1, 30, n),
+    "depenses_rd": np.random.randint(10000, 500000, n),
+    "nb_demandes_precedentes": np.random.randint(0, 10, n),
+    "score_conformite": np.random.uniform(0, 1, n),  # 0 = mauvais, 1 = parfait
+})
+
+📊 4. Explication des colonnes (TRÈS IMPORTANT pour le client)
+Voici comment présenter les variables :
+* taille_entreprise
+    * 1 = Petite entreprise
+    * 2 = Moyenne entreprise
+    * 3 = Grande entreprise 👉 Les grandes entreprises ont souvent des dossiers plus structurés
+* annees_activite
+    * Nombre d’années d’existence 👉 Une entreprise plus ancienne peut être perçue comme plus stable
+* depenses_rd
+    * Dépenses en recherche et développement ($) 👉 Plus les dépenses sont élevées, plus le crédit est justifié
+* nb_demandes_precedentes
+    * Nombre de demandes de crédit passées 👉 Trop de demandes peuvent augmenter le niveau de vérification
+* score_conformite
+    * Score entre 0 et 1 👉 Mesure du respect des règles fiscales
+
+🎯 5. Création de la variable cible (décision)
+Nous simulons une règle de décision :
+data["approuve"] = (
+    (data["depenses_rd"] > 100000) &
+    (data["score_conformite"] > 0.5) &
+    (data["nb_demandes_precedentes"] < 7)
+).astype(int)
+👉 Explication simple : Une demande est approuvée si :
+* Les dépenses R&D sont élevées
+* L’entreprise est conforme
+* Elle ne fait pas trop de demandes
+
+👀 6. Aperçu des données
+data.head()
+
+🔀 7. Séparation entraînement / test
+X = data.drop("approuve", axis=1)
+y = data["approuve"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+🤖 8. Entraînement du modèle
+model = LogisticRegression()
+model.fit(X_train, y_train)
+
+📈 9. Évaluation du modèle
+y_pred = model.predict(X_test)
+
+print(classification_report(y_test, y_pred))
+👉 Explication client :
+* Mesure la qualité des prédictions (bons refus / bonnes approbations)
+
+🔍 10. Interprétation du modèle
+coefficients = pd.DataFrame({
+    "Variable": X.columns,
+    "Coefficient": model.coef_[0]
+})
+
+coefficients
+👉 Interprétation simple :
+* Coefficient positif → augmente la probabilité d’approbation
+* Coefficient négatif → diminue la probabilité
+Exemples :
+* depenses_rd positif → plus de R&D = plus de chances
+* nb_demandes_precedentes négatif → trop de demandes = moins de chances
+
+🧪 11. Test avec une nouvelle entreprise
+nouvelle_entreprise = pd.DataFrame({
+    "taille_entreprise": [2],
+    "annees_activite": [10],
+    "depenses_rd": [200000],
+    "nb_demandes_precedentes": [2],
+    "score_conformite": [0.8]
+})
+
+prediction = model.predict(nouvelle_entreprise)
+probabilite = model.predict_proba(nouvelle_entreprise)
+
+print("Prédiction (1=Approuvé, 0=Refusé):", prediction[0])
+print("Probabilité d’approbation:", probabilite[0][1])
+
+🧾 12. Conclusion pour le client
+Ce notebook permet de comprendre :
+* Comment les données sont organisées (tableau / DataFrame)
+* Comment un modèle apprend à partir d’exemples
+* Comment une décision peut être simulée
+* Comment interpréter les résultats simplement
+
+💡 Améliorations possibles
+Je peux t’aider à rendre ça encore plus “client-ready” avec :
+* 📊 Graphiques (très efficaces en présentation)
+* 🧩 Ajout de règles fiscales plus réalistes
+* 🔎 Explications avancées (type “pourquoi la décision a été prise”)
+* 🎯 Version PowerPoint pour présentation
+Tu veux une version encore plus réaliste type audit Revenu Québec ou plutôt ultra simplifiée pour formation client ?
