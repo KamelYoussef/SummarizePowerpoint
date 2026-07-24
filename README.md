@@ -1,60 +1,47 @@
-import whisper
-import torch
-import librosa
-from pyannote.audio import Pipeline
-
-# 1. Load audio
-audio, sample_rate = librosa.load("file.mp3", sr=16000)
-waveform = torch.tensor(audio).float()
-
-# 2. Transcription
-model = whisper.load_model("small", device="cpu")
-result = whisper.transcribe(model, "file.mp3")
-segments = result["segments"]
-
-# 3. Speaker diarization
-pipeline = Pipeline.from_pretrained(
-    "pyannote/speaker-diarization-3.1",
-    use_auth_token="YOUR_HF_TOKEN"
-)
-
-diarization = pipeline({"waveform": waveform, "sample_rate": sample_rate})
-
-# 4. Create merged timeline of text + speakers
-timeline = []
-
-# Add all text chunks with their times
-for segment in segments:
-    timeline.append({
-        "type": "text",
-        "start": segment["start"],
-        "end": segment["end"],
-        "content": segment["text"].strip()
-    })
-
-# Add all speaker turns with their times
-for turn, _, speaker in diarization.itertracks(yield_label=True):
-    timeline.append({
-        "type": "speaker",
-        "start": turn.start,
-        "end": turn.end,
-        "speaker": speaker
-    })
-
-# Sort by start time
-timeline.sort(key=lambda x: x["start"])
-
-# 5. Generate clean transcript
+# 5. Generate clean transcript - merge same speaker lines
 current_speaker = None
+current_text = []
 output = []
 
 for item in timeline:
     if item["type"] == "speaker":
         current_speaker = item["speaker"]
     elif item["type"] == "text":
-        # Check if speaker changed at or before this text
-        speaker_str = f"[Speaker {current_speaker}]" if current_speaker else "[Unknown]"
-        output.append(f"{speaker_str}: {item['content']}")
+        speaker = current_speaker if current_speaker else "Unknown"
+        
+        # If speaker changed, flush previous speaker's text
+        if current_text and (not current_speaker or speaker != output[-1].split(":")[0].replace("[Speaker ", "").replace("]", "")):
+            # Save previous speaker's combined text
+            pass
+        
+        current_text.append(item["content"])
+
+# Better approach - group by speaker
+current_speaker = None
+accumulated_text = []
+output = []
+
+for item in timeline:
+    if item["type"] == "speaker":
+        # If speaker changed, save previous speaker's text
+        if accumulated_text and current_speaker is not None:
+            speaker_str = f"[Speaker {current_speaker}]"
+            combined = " ".join(accumulated_text)
+            output.append(f"{speaker_str}: {combined}")
+            accumulated_text = []
+        
+        current_speaker = item["speaker"]
+    
+    elif item["type"] == "text":
+        if current_speaker is None:
+            current_speaker = "Unknown"
+        accumulated_text.append(item["content"])
+
+# Don't forget the last speaker's accumulated text
+if accumulated_text and current_speaker is not None:
+    speaker_str = f"[Speaker {current_speaker}]"
+    combined = " ".join(accumulated_text)
+    output.append(f"{speaker_str}: {combined}")
 
 # Print clean transcript
 transcript = "\n".join(output)
