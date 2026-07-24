@@ -1,7 +1,9 @@
-# 5. Generate clean transcript - merge same speaker lines
+timeline.sort(key=lambda x: x["start"])
+
+# 5. Generate merged transcript
+output = []
 current_speaker = None
 current_text = []
-output = []
 
 for item in timeline:
     if item["type"] == "speaker":
@@ -9,44 +11,23 @@ for item in timeline:
     elif item["type"] == "text":
         speaker = current_speaker if current_speaker else "Unknown"
         
-        # If speaker changed, flush previous speaker's text
-        if current_text and (not current_speaker or speaker != output[-1].split(":")[0].replace("[Speaker ", "").replace("]", "")):
-            # Save previous speaker's combined text
-            pass
-        
-        current_text.append(item["content"])
-
-# Better approach - group by speaker
-current_speaker = None
-accumulated_text = []
-output = []
-
-for item in timeline:
-    if item["type"] == "speaker":
         # If speaker changed, save previous speaker's text
-        if accumulated_text and current_speaker is not None:
-            speaker_str = f"[Speaker {current_speaker}]"
-            combined = " ".join(accumulated_text)
-            output.append(f"{speaker_str}: {combined}")
-            accumulated_text = []
+        if output and output[-1]["speaker"] != speaker:
+            current_text = []
         
-        current_speaker = item["speaker"]
-    
-    elif item["type"] == "text":
-        if current_speaker is None:
-            current_speaker = "Unknown"
-        accumulated_text.append(item["content"])
+        # Add text to current speaker's group
+        if output and output[-1]["speaker"] == speaker:
+            output[-1]["text"].append(item["content"])
+        else:
+            output.append({"speaker": speaker, "text": [item["content"]]})
 
-# Don't forget the last speaker's accumulated text
-if accumulated_text and current_speaker is not None:
-    speaker_str = f"[Speaker {current_speaker}]"
-    combined = " ".join(accumulated_text)
-    output.append(f"{speaker_str}: {combined}")
-
-# Print clean transcript
-transcript = "\n".join(output)
-print(transcript)
+# Print clean merged transcript
+for entry in output:
+    merged_text = " ".join(entry["text"])
+    print(f"[Speaker {entry['speaker']}]: {merged_text}")
 
 # Optional: Save to file
 with open("transcript.txt", "w") as f:
-    f.write(transcript)
+    for entry in output:
+        merged_text = " ".join(entry["text"])
+        f.write(f"[Speaker {entry['speaker']}]: {merged_text}\n")
