@@ -1,23 +1,65 @@
+import whisper
+import torch
+import librosa
+from pyannote.audio import Pipeline
+
+# 1. Load audio
+audio, sample_rate = librosa.load("file.mp3", sr=16000)
+waveform = torch.tensor(audio).float()
+
+# 2. Transcription
+model = whisper.load_model("small", device="cpu")
+result = whisper.transcribe(model, "file.mp3")
+segments = result["segments"]
+
+# 3. Speaker diarization
+pipeline = Pipeline.from_pretrained(
+    "pyannote/speaker-diarization-3.1",
+    use_auth_token="YOUR_HF_TOKEN"
+)
+
+diarization = pipeline({"waveform": waveform, "sample_rate": sample_rate})
+
+# 4. Create merged timeline of text + speakers
+timeline = []
+
+# Add all text chunks with their times
 for segment in segments:
-    seg_start = segment["start"]
-    seg_end = segment["end"]
-    text = segment["text"]
-    
-    # Get ALL speakers in this segment with their time ranges
-    speaker_ranges = {}
-    for turn, _, speaker in diarization.itertracks(yield_label=True):
-        if turn.start < seg_end and turn.end > seg_start:
-            # Overlap found
-            overlap_start = max(turn.start, seg_start)
-            overlap_end = min(turn.end, seg_end)
-            
-            if speaker not in speaker_ranges:
-                speaker_ranges[speaker] = []
-            speaker_ranges[speaker].append((overlap_start, overlap_end))
-    
-    # Format output
-    if speaker_ranges:
-        speakers_str = ", ".join([f"Speaker {s}" for s in speaker_ranges.keys()])
-        print(f"[{seg_start:.2f}s - {seg_end:.2f}s] {speakers_str}: {text}")
-    else:
-        print(f"[{seg_start:.2f}s - {seg_end:.2f}s] [Unknown]: {text}")
+    timeline.append({
+        "type": "text",
+        "start": segment["start"],
+        "end": segment["end"],
+        "content": segment["text"].strip()
+    })
+
+# Add all speaker turns with their times
+for turn, _, speaker in diarization.itertracks(yield_label=True):
+    timeline.append({
+        "type": "speaker",
+        "start": turn.start,
+        "end": turn.end,
+        "speaker": speaker
+    })
+
+# Sort by start time
+timeline.sort(key=lambda x: x["start"])
+
+# 5. Generate clean transcript
+current_speaker = None
+output = []
+
+for item in timeline:
+    if item["type"] == "speaker":
+        current_speaker = item["speaker"]
+    elif item["type"] == "text":
+        # Check if speaker changed at or before this text
+        speaker_str = f"[Speaker {current_speaker}]" if current_speaker else "[Unknown]"
+        output.append(f"{speaker_str}: {item['content']}")
+
+# Print clean transcript
+transcript = "\n".join(output)
+print(transcript)
+
+# Optional: Save to file
+with open("transcript.txt", "w") as f:
+    f.write(transcript)
