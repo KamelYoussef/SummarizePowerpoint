@@ -1,29 +1,23 @@
-# Split segments by speaker boundaries
-output_chunks = []
-
 for segment in segments:
     seg_start = segment["start"]
     seg_end = segment["end"]
     text = segment["text"]
     
-    # Get speaker timeline for this segment
-    speaker_timeline = []
+    # Get ALL speakers in this segment with their time ranges
+    speaker_ranges = {}
     for turn, _, speaker in diarization.itertracks(yield_label=True):
         if turn.start < seg_end and turn.end > seg_start:
+            # Overlap found
             overlap_start = max(turn.start, seg_start)
             overlap_end = min(turn.end, seg_end)
-            speaker_timeline.append({
-                "start": overlap_start,
-                "end": overlap_end,
-                "speaker": speaker
-            })
+            
+            if speaker not in speaker_ranges:
+                speaker_ranges[speaker] = []
+            speaker_ranges[speaker].append((overlap_start, overlap_end))
     
-    # Sort by time
-    speaker_timeline.sort(key=lambda x: x["start"])
-    
-    # Print with speaker transitions
-    if speaker_timeline:
-        for i, turn in enumerate(speaker_timeline):
-            print(f"[{turn['start']:.2f}s - {turn['end']:.2f}s] Speaker {turn['speaker']}: {text}")
+    # Format output
+    if speaker_ranges:
+        speakers_str = ", ".join([f"Speaker {s}" for s in speaker_ranges.keys()])
+        print(f"[{seg_start:.2f}s - {seg_end:.2f}s] {speakers_str}: {text}")
     else:
         print(f"[{seg_start:.2f}s - {seg_end:.2f}s] [Unknown]: {text}")
