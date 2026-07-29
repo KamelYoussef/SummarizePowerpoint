@@ -1,33 +1,48 @@
-timeline.sort(key=lambda x: x["start"])
+"""
+Transcribe French audio using Mistral's Voxtral Mini (3B), open-weight, Apache 2.0.
 
-# 5. Generate merged transcript
-output = []
-current_speaker = None
-current_text = []
+Install:
+    pip install -U transformers
+    pip install --upgrade "mistral-common[audio]"
 
-for item in timeline:
-    if item["type"] == "speaker":
-        current_speaker = item["speaker"]
-    elif item["type"] == "text":
-        speaker = current_speaker if current_speaker else "Unknown"
-        
-        # If speaker changed, save previous speaker's text
-        if output and output[-1]["speaker"] != speaker:
-            current_text = []
-        
-        # Add text to current speaker's group
-        if output and output[-1]["speaker"] == speaker:
-            output[-1]["text"].append(item["content"])
-        else:
-            output.append({"speaker": speaker, "text": [item["content"]]})
+Requires a GPU with ~9.5 GB VRAM (bf16/fp16). For CPU-only setups, consider
+faster-whisper large-v3 instead, or the vLLM server route documented on
+Voxtral's model card for lighter local inference.
+"""
 
-# Print clean merged transcript
-for entry in output:
-    merged_text = " ".join(entry["text"])
-    print(f"[Speaker {entry['speaker']}]: {merged_text}")
+from transformers import VoxtralForConditionalGeneration, AutoProcessor
+import torch
 
-# Optional: Save to file
-with open("transcript.txt", "w") as f:
-    for entry in output:
-        merged_text = " ".join(entry["text"])
-        f.write(f"[Speaker {entry['speaker']}]: {merged_text}\n")
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+REPO_ID = "mistralai/Voxtral-Mini-3B-2507"
+
+# Path or URL to your French audio file (wav/mp3/etc.)
+AUDIO_PATH = "path/to/your/french_audio.mp3"
+
+
+def transcribe(audio_path: str, language: str = "fr") -> str:
+    processor = AutoProcessor.from_pretrained(REPO_ID)
+    model = VoxtralForConditionalGeneration.from_pretrained(
+        REPO_ID,
+        torch_dtype=torch.bfloat16 if DEVICE == "cuda" else torch.float32,
+        device_map=DEVICE,
+    )
+
+    inputs = processor.apply_transcription_request(
+        language=language,
+        audio=audio_path,
+        model_id=REPO_ID,
+    )
+    inputs = inputs.to(DEVICE, dtype=torch.bfloat16 if DEVICE == "cuda" else torch.float32)
+
+    outputs = model.generate(**inputs, max_new_tokens=500)
+    decoded = processor.batch_decode(
+        outputs[:, inputs.input_ids.shape[1]:], skip_special_tokens=True
+    )
+    return decoded[0]
+
+
+if __name__ == "__main__":
+    text = transcribe(AUDIO_PATH, language="fr")
+    print("Transcription (FR):")
+    print(text)
